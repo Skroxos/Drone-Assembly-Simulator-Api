@@ -2,6 +2,7 @@
 {
     public record SaveResultRequest (
         string Name,
-        float FinishTime
+        float FinishTime,
+        string Hash
         );
 }

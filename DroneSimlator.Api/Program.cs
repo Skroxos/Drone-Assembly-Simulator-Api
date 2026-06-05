@@ -3,6 +3,8 @@ using DroneSimlator.Api.Data;
 using DroneSimlator.Api.Models;
 using DroneSimlator.Api.DTOs;
 using System.Threading.RateLimiting;
+using System.Text;
+using System.Security.Cryptography;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,7 +51,7 @@ app.UseHttpsRedirection();
 app.UseRateLimiter();
 
 
-app.MapPost("/api/assembly/save", async (SaveResultRequest request, SimulatorDbContext dbContext) =>
+app.MapPost("/api/assembly/save", async (SaveResultRequest request, SimulatorDbContext dbContext, IConfiguration config) =>
 {
     if (string.IsNullOrWhiteSpace(request.Name))
     {
@@ -58,6 +60,25 @@ app.MapPost("/api/assembly/save", async (SaveResultRequest request, SimulatorDbC
     if (request.FinishTime <= 0)
     {
         return Results.BadRequest("Finish time must be greater than zero.");
+    }
+
+    var secretKey = config["ApiSecretKey"];
+    if (string.IsNullOrEmpty(secretKey))
+    {
+        return Results.StatusCode(500);
+    }
+    
+    string timeString = request.FinishTime.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+    string rawData = request.Name + timeString + secretKey;
+
+    byte[] inputBytes = Encoding.UTF8.GetBytes(rawData);
+    byte[] hashBytes = SHA256.HashData(inputBytes);
+
+    string expectedHash = Convert.ToHexString(hashBytes).ToLowerInvariant();
+
+    if (request.Hash != expectedHash)
+    {
+        return Results.Unauthorized();
     }
 
     var session = new DroneAssemblySession
